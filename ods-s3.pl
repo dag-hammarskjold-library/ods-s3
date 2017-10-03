@@ -96,7 +96,7 @@ sub MAIN {
 						my $result = $ods->download($syms[0],$lang,$save);
 						if ($result) {
 							print "\t";
-							my $key = save_path('Drop/ods',$record->id,\@syms,$lang);
+							my $key = save_path('Drop/docs_new',$record->id,\@syms,$lang);
 							my $ret = system qq|aws s3 mv "$save" "s3://undhl-dgacm/$key"|;
 							if ($ret == 0) {
 								#$dbh->do(q|insert into keys values($bib,"$lang","$key")|);
@@ -150,7 +150,7 @@ sub encode_fn {
 sub s3_data {
 	my $range = shift;
 	my $return;
-	my $cmd = qq|aws s3 ls s3://undhl-dgacm/Drop/ods/$range/ --recursive|;
+	my $cmd = qq|aws s3 ls s3://undhl-dgacm/Drop/docs_new/$range/ --recursive|;
 	say qq|running "$cmd"...|;
 	my $qx = qx|$cmd|;
 	die "s3 read error $?" unless any {$? == $_} 0, 256;
