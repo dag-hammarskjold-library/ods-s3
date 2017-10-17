@@ -40,6 +40,7 @@ sub options {
 	my @opts = (
 		['h' => 'help'],
 		['s:' => 'sql'],
+		['S:', => 'script'],
 		['d:' => 'save dir'],
 		['3:' => 's3 db']
 	);
@@ -48,7 +49,7 @@ sub options {
 		say join ' - ', @$_ for @opts;
 		exit; 
 	}
-	$opts{$_} || die "required opt $_ missing\n" for qw|s d 3|;
+	$opts{$_} || die "required opt $_ missing\n" for qw|d 3|;
 	-e $opts{$_} || die qq|"$opts{$_}" is an invalid path\n| for qw|d 3|;
 	return \%opts;
 }
@@ -68,7 +69,16 @@ sub MAIN {
 	use DBI;
 	my $dbh = DBI->connect('dbi:SQLite:dbname='.$opts->{3},'','');
 	
-	my @ids = Get::Hzn->new(sql => $opts->{s})->execute;
+	my ($sql,$opt);
+	if ($opts->{s}) {
+		$sql = 'sql';
+		$opt = 's';
+	} elsif ($opts->{S}) {
+		$sql = 'script';
+		$opt = 'S';
+	}
+	
+	my @ids = sort {$a->[0] <=> $b->[0]} Get::Hzn->new($sql => $opts->{$opt})->execute;
 	while (@ids) {
 		my $chunk = join ',', map {$_->[0]} splice @ids, 0, 1000;
 		Get::Hzn::Dump::Bib->new->iterate (
@@ -91,7 +101,6 @@ sub MAIN {
 					say $record->id." $syms[0] $lang already in s3" and next if $s3->{$record->id}->{$lang};
 					$c++;
 					my $save = save_path($opts->{d},$record->id,\@syms,$lang);
-					#say "$save already exists\n" and next if -e $save;
 					DOWNLOAD: {
 						my $result = $ods->download($syms[0],$lang,$save);
 						if ($result) {
@@ -99,18 +108,18 @@ sub MAIN {
 							my $key = save_path('Drop/docs_new',$record->id,\@syms,$lang);
 							my $ret = system qq|aws s3 mv "$save" "s3://undhl-dgacm/$key"|;
 							if ($ret == 0) {
-								#$dbh->do(q|insert into keys values($bib,"$lang","$key")|);
+								my $bib = $record->id;
+								my $sql = qq|insert into keys values($bib,"$lang","$key")|;
+								$dbh->do($sql);
 								say "data recorded #";
 							}
 						}
 					}
 					print "\n";
 				}
-				#store($s3,join ('/', $opts->{3}, $range)) if ref $s3;
 				return;
 			}
 		);
-		#undef $s3;
 	}
 }
 
