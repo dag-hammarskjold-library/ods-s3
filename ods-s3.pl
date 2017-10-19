@@ -42,7 +42,9 @@ sub options {
 		['s:' => 'sql'],
 		['S:', => 'script'],
 		['d:' => 'save dir'],
-		['3:' => 's3 db']
+		['3:' => 's3 db'],
+		['t' => 'sort by bib# asc'],
+		['T' => 'sort by bib# desc']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -78,7 +80,9 @@ sub MAIN {
 		$opt = 'S';
 	}
 	
-	my @ids = sort {$a->[0] <=> $b->[0]} Get::Hzn->new($sql => $opts->{$opt})->execute;
+	my @ids = Get::Hzn->new($sql => $opts->{$opt})->execute;
+	@ids = sort {$a->[0] <=> $b->[0]} @ids if $opts->{t};
+	@ids = sort {$b->[0] <=> $a->[0]} @ids if $opts->{T};
 	while (@ids) {
 		my $chunk = join ',', map {$_->[0]} splice @ids, 0, 1000;
 		Get::Hzn::Dump::Bib->new->iterate (
@@ -110,7 +114,7 @@ sub MAIN {
 							if ($ret == 0) {
 								my $bib = $record->id;
 								my $sql = qq|insert into keys values($bib,"$lang","$key")|;
-								$dbh->do($sql);
+								$dbh->do($sql) or die "db error";
 								say "data recorded #";
 							}
 						}
