@@ -44,7 +44,8 @@ sub options {
 		['d:' => 'save dir'],
 		['3:' => 's3 db'],
 		['t' => 'sort by bib# asc'],
-		['T' => 'sort by bib# desc']
+		['T' => 'sort by bib# desc'],
+		['r' => 'redownload technical reissues']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -102,7 +103,15 @@ sub MAIN {
 					next unless index($_856->get_sub('u'),'http://daccess-ods.un.org') > -1;
 					my $lang = LANG->{$_856->get_sub('3')};
 					warn "$syms[0] language not detected\n" and next if ! $lang;
-					say $record->id." $syms[0] $lang already in s3" and next if $s3->{$record->id}->{$lang};
+					my $_596 = $record->get_values('596','a');
+					if ($s3->{$record->id}->{$lang}) {
+						if ($opts->{r} && $_596 && $_596 =~ /reissued for technical reasons/i) {
+							print "*redownloading technical reissue...";
+						} else {
+							say $record->id." $syms[0] $lang already in s3";
+							next;
+						}	
+					}
 					$c++;
 					my $save = save_path($opts->{d},$record->id,\@syms,$lang);
 					DOWNLOAD: {
@@ -113,7 +122,13 @@ sub MAIN {
 							my $ret = system qq|aws s3 mv "$save" "s3://undhl-dgacm/$key"|;
 							if ($ret == 0) {
 								my $bib = $record->id;
-								my $sql = qq|insert into keys values($bib,"$lang","$key")|;
+								my $check = $dbh->selectrow_arrayref(qq|select key from keys where bib = $bib and lang = "$lang"|);
+								my $sql;
+								if ($check->[0]) {
+									$sql = qq|update keys set key = "$key" where bib = $bib and lang = "$lang"|;
+								} else {
+									$sql = qq|insert into keys values($bib,"$lang","$key")|;
+								}
 								$dbh->do($sql) or die "db error";
 								say "data recorded #";
 							}
@@ -164,12 +179,11 @@ sub s3_data {
 	my $range = shift;
 	my $return;
 	my $cmd = qq|aws s3 ls s3://undhl-dgacm/Drop/docs_new/$range/ --recursive|;
-	say qq|running "$cmd"...|;
-	my $qx = qx|$cmd|;
-	die "s3 read error $?" unless any {$? == $_} 0, 256;
-	for (split "\n", $qx) {
-		my @line = split /\s+/, $_;
-		my $path = join '', @line[3..$#line];
+	open my $h,'-|',$cmd;
+	#die "s3 read error $?" unless any {$? == $_} 0, 256;
+	while (<$h>) {
+		chomp;
+		my $path = substr $_,31;
 		my $bib = (split /\//, $path)[3];
 		my $lang = substr $path,-6,2;
 		$return->{$bib}->{$lang} = $path;
