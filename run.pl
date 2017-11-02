@@ -116,21 +116,27 @@ sub MAIN {
 					my $save = save_path($opts->{d},$record->id,\@syms,$lang);
 					DOWNLOAD: {
 						my $result = $ods->download($syms[0],$lang,$save);
+						if (! $result and $syms[1]) {
+							print "\ttrying second symbol... ";
+							$result = $ods->download($syms[1],$lang,$save);
+						} 
 						if ($result) {
 							print "\t";
 							my $key = save_path('Drop/docs_new',$record->id,\@syms,$lang);
 							my $ret = system qq|aws s3 mv "$save" "s3://undhl-dgacm/$key"|;
 							if ($ret == 0) {
 								my $bib = $record->id;
-								my $check = $dbh->selectrow_arrayref(qq|select key from keys where bib = $bib and lang = "$lang"|);
+								my $check = $dbh->selectrow_arrayref(qq|select key from docs where bib = $bib and lang = "$lang"|);
 								my $sql;
 								if ($check->[0]) {
-									$sql = qq|update keys set key = "$key" where bib = $bib and lang = "$lang"|;
+									$sql = qq|update docs set key = "$key" where bib = $bib and lang = "$lang"|;
 								} else {
-									$sql = qq|insert into keys values($bib,"$lang","$key")|;
+									$sql = qq|insert into docs values($bib,"$lang","$key")|;
 								}
 								$dbh->do($sql) or die "db error";
 								say "data recorded #";
+							} else {
+								die "s3 error $?";
 							}
 						}
 					}
@@ -180,7 +186,6 @@ sub s3_data {
 	my $return;
 	my $cmd = qq|aws s3 ls s3://undhl-dgacm/Drop/docs_new/$range/ --recursive|;
 	open my $h,'-|',$cmd;
-	#die "s3 read error $?" unless any {$? == $_} 0, 256;
 	while (<$h>) {
 		chomp;
 		my $path = substr $_,31;
@@ -188,6 +193,9 @@ sub s3_data {
 		my $lang = substr $path,-6,2;
 		$return->{$bib}->{$lang} = $path;
 	}
+	close $h; #close handle to get exit code
+	die "s3 read error $?" unless any {$? == $_} 0, 256;
+	
 	return $return;
 }
 
