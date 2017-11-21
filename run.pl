@@ -45,7 +45,8 @@ sub options {
 		['3:' => 's3 db'],
 		['t' => 'sort by bib# asc'],
 		['T' => 'sort by bib# desc'],
-		['r' => 'redownload technical reissues']
+		['r' => 'redownload technical reissues'],
+		['f' => 'force repalce s3 file (even if already exists']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -106,7 +107,9 @@ sub MAIN {
 					my $_596 = $record->get_values('596','a');
 					if ($s3->{$record->id}->{$lang}) {
 						if ($opts->{r} && $_596 && $_596 =~ /reissued for technical reasons/i) {
-							print "*redownloading technical reissue...";
+							print "*redownloading technical reissue... ";
+						} elsif ($opts->{f}) {
+							print "force re-download... ";
 						} else {
 							say $record->id." $syms[0] $lang already in s3";
 							next;
