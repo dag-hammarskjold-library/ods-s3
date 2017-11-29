@@ -19,6 +19,7 @@ use Data::Dumper;
 $Data::Dumper::Indent = 1;
 use Getopt::Std;
 use Storable;
+use File::Path qw/remove_tree/;
 use List::Util qw/any all/;
 
 use constant LANG => {
@@ -46,7 +47,7 @@ sub options {
 		['t' => 'sort by bib# asc'],
 		['T' => 'sort by bib# desc'],
 		['r' => 'redownload technical reissues'],
-		['f' => 'force repalce s3 file (even if already exists']
+		['f' => 'force replace s3 file (even if already exists)']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -54,7 +55,7 @@ sub options {
 		exit; 
 	}
 	$opts{$_} || die "required opt $_ missing\n" for qw|d 3|;
-	-e $opts{$_} || die qq|"$opts{$_}" is an invalid path\n| for qw|d 3|;
+	-e $opts{$_} || die qq|"$opts{$_}" is an invalid path\n| for qw|3|;
 	return \%opts;
 }
 
@@ -116,6 +117,7 @@ sub MAIN {
 						}	
 					}
 					$c++;
+					mkdir $opts->{d} if ! -e $opts->{d};
 					my $save = save_path($opts->{d},$record->id,\@syms,$lang);
 					DOWNLOAD: {
 						my $result = $ods->download($syms[0],$lang,$save);
@@ -148,6 +150,7 @@ sub MAIN {
 				return;
 			}
 		);
+		#remove_tree($opts->{d});
 	}
 }
 
