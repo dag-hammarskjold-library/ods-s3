@@ -47,7 +47,8 @@ sub options {
 		['t' => 'sort by bib# asc'],
 		['T' => 'sort by bib# desc'],
 		['r' => 'redownload technical reissues'],
-		['f' => 'force replace s3 file (even if already exists)']
+		['f' => 'force replace s3 file (even if already exists)'],
+		['l:' => 'use list of bibs']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -81,6 +82,56 @@ sub MAIN {
 	} elsif ($opts->{S}) {
 		$sql = 'script';
 		$opt = 'S';
+	} elsif (my $list = $opts->{l}) {
+		open my $in,'<',$list;
+		my @ids;
+		while (<$in>) {
+			chomp;
+			my @row = split "\t";
+			push @ids, $row[0];
+		}
+		$sql = 'sql';
+		$opt = 's';
+		my $ids = join ',', @ids;
+		$opts->{s} = "select bib# from bib_control where bib# in ($ids)";
+	} else {
+		say 'indexing s3 data...';
+		my $s3;
+		{
+			my $sth = $dbh->prepare('select bib,lang from docs');
+			$sth->execute;
+			while (my $row = $sth->fetch) {
+				push @{$s3->{$row->[0]}}, $row->[1];
+			}
+		}
+		
+		say 'looking for new Hzn files...';
+		
+		my @ids;
+		my $get = Get::Hzn->new (
+			sql => 'select bib#,text from bib where tag = "856" and bib# in (select bib# from bib where tag = "191")',
+			encoding => 'utf8'
+		);
+		my @results = $get->execute (
+			callback => sub {
+				my $row = shift;
+				my $id = $row->[0];
+				my $text = $row->[1] or return;
+				return unless $text =~ /ods\.un\.org/;
+				my $lang = LANG->{$get->get_sub($text,'3')} || '?';
+				return if any {$lang eq $_} @{$s3->{$id}};
+				say join "\t", $id, $lang, ':', @{$s3->{$id}};
+				push @ids, $row->[0];
+			}
+		);
+		{
+			open my $list,'>','missing_'.time.'.txt';
+			say {$list} $_ for @ids;
+		}
+		my $ids = join ',', @ids;
+		$sql = 'sql';
+		$opt = 's';
+		$opts->{s} = "select bib# from bib_control where bib# in ($ids)";
 	}
 	
 	my @ids = Get::Hzn->new($sql => $opts->{$opt})->execute;
@@ -124,13 +175,13 @@ sub MAIN {
 						if (! $result and $syms[1]) {
 							print "\ttrying second symbol... ";
 							$result = $ods->download($syms[1],$lang,$save);
-						} 
+						}
+						my $bib = $record->id;
+						my $key = save_path('Drop/docs_new',$record->id,\@syms,$lang);
 						if ($result) {
 							print "\t";
-							my $key = save_path('Drop/docs_new',$record->id,\@syms,$lang);
 							my $ret = system qq|aws s3 mv "$save" "s3://undhl-dgacm/$key"|;
 							if ($ret == 0) {
-								my $bib = $record->id;
 								my $check = $dbh->selectrow_arrayref(qq|select key from docs where bib = $bib and lang = "$lang"|);
 								my $sql;
 								if ($check->[0]) {
@@ -138,10 +189,16 @@ sub MAIN {
 								} else {
 									$sql = qq|insert into docs values($bib,"$lang","$key")|;
 								}
-								$dbh->do($sql) or die "db error";
+								$dbh->do($sql) or die "db error: $@";
 								say "data recorded #";
 							} else {
 								die "s3 error $?";
+							}
+						} else {
+							say "error recorded #";
+							my $check = $dbh->selectrow_arrayref(qq|select key from error where bib = $bib and lang = "$lang"|);
+							unless ($check->[0]) {
+								$dbh->do(qq|insert into error values($bib,"$lang","$key")|) or die "db error: $@";
 							}
 						}
 					}
