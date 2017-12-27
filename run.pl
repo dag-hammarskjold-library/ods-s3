@@ -21,6 +21,7 @@ use Getopt::Std;
 use Storable;
 use File::Path qw/remove_tree/;
 use List::Util qw/any all/;
+use IO::Handle;
 
 use constant LANG => {
 	العربية => 'AR',
@@ -107,11 +108,13 @@ sub MAIN {
 		
 		say 'looking for new Hzn files...';
 		
-		my @ids;
+		my %ids;
 		my $get = Get::Hzn->new (
 			sql => 'select bib#,text from bib where tag = "856" and bib# in (select bib# from bib where tag = "191")',
 			encoding => 'utf8'
 		);
+		open my $list,'>','missing_'.time.'.txt';
+		$list->autoflush(1);
 		my @results = $get->execute (
 			callback => sub {
 				my $row = shift;
@@ -120,15 +123,11 @@ sub MAIN {
 				return unless $text =~ /ods\.un\.org/;
 				my $lang = LANG->{$get->get_sub($text,'3')} || '?';
 				return if any {$lang eq $_} @{$s3->{$id}};
-				say join "\t", $id, $lang, ':', @{$s3->{$id}};
-				push @ids, $row->[0];
+				say {$list} join "\t", $id, $lang, ':', @{$s3->{$id}};
+				$ids{$row->[0]} //= 1;
 			}
 		);
-		{
-			open my $list,'>','missing_'.time.'.txt';
-			say {$list} $_ for @ids;
-		}
-		my $ids = join ',', @ids;
+		my $ids = join ',', sort {$a <=> $b} keys %ids;
 		$sql = 'sql';
 		$opt = 's';
 		$opts->{s} = "select bib# from bib_control where bib# in ($ids)";
@@ -190,6 +189,7 @@ sub MAIN {
 									$sql = qq|insert into docs values($bib,"$lang","$key")|;
 								}
 								$dbh->do($sql) or die "db error: $@";
+								$dbh->do(qq|delete from error where bib = $bib and lang = "$lang"|);
 								say "data recorded #";
 							} else {
 								die "s3 error $?";
