@@ -238,7 +238,7 @@ sub encode_fn {
 	my @subbed;
 	for (@$syms) {
 		my $sub = $_;
-		$sub =~ tr/\/\*/_!/; 
+		$sub =~ tr/\/\*:/_!#/; 
 		push @subbed, $sub;
 	}
 	return join(';',sort @subbed)."-$lang.pdf";
