@@ -34,6 +34,16 @@ use constant LANG => {
 	Other => 'DE'
 };
 
+use constant LANG2 => {
+	A => 'AR',
+	C => 'ZH',
+	E => 'EN',
+	F => 'FR',
+	R => 'RU',
+	S => 'ES',
+	O => 'DE'
+};
+
 RUN: {
 	MAIN(options());
 }
@@ -171,9 +181,14 @@ sub MAIN {
 					my $save = save_path($opts->{d},$record->id,\@syms,$lang);
 					DOWNLOAD: {
 						my $result = $ods->download($syms[0],$lang,$save);
-						if (! $result and $syms[1]) {
+						if (! $result && $syms[1]) {
 							print "\ttrying second symbol... ";
 							$result = $ods->download($syms[1],$lang,$save);
+						}
+						if (! $result) {
+							# try using the lang code from the URL (might be a multi lang file)
+							print "\ttrying alt lang code... ";
+							$result = $ods->download($syms[0],LANG2->{$1},$save) if $_856->get_sub('u') =~ /Lang=([ACEFRSO])/;
 						}
 						my $bib = $record->id;
 						my $key = save_path('Drop/docs_new',$record->id,\@syms,$lang);
