@@ -185,10 +185,10 @@ sub MAIN {
 							print "\ttrying second symbol... ";
 							$result = $ods->download($syms[1],$lang,$save);
 						}
-						if (! $result) {
-							# try using the lang code from the URL (might be a multi lang file)
+						if (! $result && $_856->get_sub('u') =~ /Lang=([ACEFRSO])/) {
 							print "\ttrying alt lang code... ";
-							$result = $ods->download($syms[0],LANG2->{$1},$save) if $_856->get_sub('u') =~ /Lang=([ACEFRSO])/;
+							my $lang2 = $1 // '';
+							$result = $ods->download($syms[0],$lang2,$save) if $lang2 ne $lang;
 						}
 						my $bib = $record->id;
 						my $key = save_path('Drop/docs_new',$record->id,\@syms,$lang);
