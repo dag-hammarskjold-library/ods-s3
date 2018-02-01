@@ -162,7 +162,7 @@ sub MAIN {
 						$s3 = s3_data($range);
 						$range_control = $range;
 					}
-					next unless index($_856->get_sub('u'),'http://daccess-ods.un.org') > -1;
+					next unless $_856->get_sub('u') =~ /(documents-dds|daccess-ods)/ > -1;
 					my $lang = LANG->{$_856->get_sub('3')};
 					warn "$syms[0] language not detected\n" and next if ! $lang;
 					my $_596 = $record->get_values('596','a');
