@@ -154,8 +154,8 @@ sub MAIN {
 			callback => sub {
 				my $record = shift;
 				my $range = range($record->id,1000);
-				my @syms = $record->get_values('191','a');
-				return if all {$_ eq '***'} @syms;
+				my @syms = grep {$_ ne '***'} $record->get_values('191','a','z');
+				return unless @syms;
 				for my $_856 ($record->get_fields('856')) {
 					if ($range_control ne $range) {
 						say "***\nrange was: $range_control; is: $range. getting new s3 data chunk...";
@@ -180,16 +180,9 @@ sub MAIN {
 					mkdir $opts->{d} if ! -e $opts->{d};
 					my $save = save_path($opts->{d},$record->id,\@syms,$lang);
 					DOWNLOAD: {
-						my $result = $ods->download($syms[0],$lang,$save);
-						if (! $result && $syms[1]) {
-							print "\ttrying second symbol... ";
-							$result = $ods->download($syms[1],$lang,$save);
-						}
-						if (! $result && $_856->get_sub('u') =~ /Lang=([ACEFRSO])/) {
-							print "\ttrying alt lang code... ";
-							my $lang2 = $1 // '';
-							$result = $ods->download($syms[0],$lang2,$save) if $lang2 ne $lang;
-						}
+						my ($dsym,$dlang) = ($1,$2) if $_856->get_sub('u') =~ /\&DS=(.*)&Lang=(.)/;
+						$dlang = LANG2->{$dlang};
+						my $result = $ods->download($dsym,$lang,$save);
 						my $bib = $record->id;
 						my $key = save_path('Drop/docs_new',$record->id,\@syms,$lang);
 						if ($result) {
