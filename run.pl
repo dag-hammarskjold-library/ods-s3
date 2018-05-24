@@ -26,12 +26,12 @@ use IO::Handle;
 use constant LANG => {
 	العربية => 'AR',
 	中文 => 'ZH',
-	Eng => 'EN',
 	English => 'EN',
-	Français => 'FR',
+	Eng => 'EN',
+	Français => 'FR',
 	Русский => 'RU',
-	Español => 'ES',
-	Other => 'DE'
+	Español => 'ES',
+	Other => 'DE',
 };
 
 use constant LANG2 => {
